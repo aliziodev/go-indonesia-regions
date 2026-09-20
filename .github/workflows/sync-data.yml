@@ -1,0 +1,135 @@
+name: Sync Dataset
+
+# aliziodev/laravel-wilayah owns normalization and publishes the neutral CSV
+# export as release assets. This workflow only re-encodes that export, so the
+# two packages can never drift apart.
+#
+# Two gates keep releases honest:
+#   1. data_hash of the published export versus the one embedded here
+#   2. the test suite, which must pass before anything is committed
+
+on:
+  schedule:
+    # An hour after the upstream sync runs, so a fresh release is already up.
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Rebuild even when data_hash is unchanged'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+
+      - name: Compare data_hash with the published export
+        id: check
+        run: |
+          curl -fsSL -o /tmp/upstream-version.json \
+            https://github.com/aliziodev/laravel-wilayah/releases/latest/download/version.json
+
+          REMOTE=$(jq -r '.data_hash // empty' /tmp/upstream-version.json)
+          LOCAL=$(jq -r '.data_hash // empty' internal/dataset/manifest.json 2>/dev/null || true)
+
+          if [ -z "$REMOTE" ]; then
+            echo "::error::The published export carries no data_hash."
+            exit 1
+          fi
+
+          echo "remote $REMOTE"
+          echo "local  ${LOCAL:-none}"
+
+          if [ "${{ inputs.force }}" = "true" ] || [ "$REMOTE" != "$LOCAL" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "Dataset is already current."
+          fi
+
+      - name: Regenerate the embedded dataset
+        if: steps.check.outputs.changed == 'true'
+        run: go run ./internal/gen
+
+      # The generator enforces referential integrity and the test suite checks
+      # the package on the new data. Nothing is committed until both pass.
+      - name: Verify
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Generated files are not gofmt-ed: $unformatted"
+            exit 1
+          fi
+
+          go vet ./...
+          go test ./...
+
+      - name: Check whether anything actually changed
+        if: steps.check.outputs.changed == 'true'
+        id: diff
+        run: |
+          if git diff --quiet -- internal/dataset version.go; then
+            echo "dirty=false" >> $GITHUB_OUTPUT
+            echo "Re-encoding produced identical files; nothing to release."
+          else
+            echo "dirty=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Work out the next version
+        if: steps.diff.outputs.dirty == 'true'
+        id: version
+        run: |
+          CURRENT=$(git tag --list 'v*' --sort=-version:refname | head -n 1)
+          CURRENT="${CURRENT#v}"
+
+          if [ -z "$CURRENT" ]; then
+            NEW="0.1.0"
+          else
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+            NEW="$MAJOR.$MINOR.$((PATCH + 1))"
+          fi
+
+          echo "new=$NEW" >> $GITHUB_OUTPUT
+          echo "Releasing v$NEW"
+
+      - name: Commit and tag
+        if: steps.diff.outputs.dirty == 'true'
+        run: |
+          DATE=$(jq -r '.data_date' internal/dataset/manifest.json)
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add internal/dataset version.go
+          git commit -m "data: sync dataset $DATE [skip ci]"
+          git tag "v${{ steps.version.outputs.new }}"
+          git push origin HEAD --tags
+
+      - name: Create the GitHub release
+        if: steps.diff.outputs.dirty == 'true'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ steps.version.outputs.new }}
+          name: v${{ steps.version.outputs.new }}
+          generate_release_notes: true
+
+      # Ask the module proxy to fetch the new version so pkg.go.dev and
+      # "go get" see it right away instead of on their own schedule.
+      - name: Warm the module proxy
+        if: steps.diff.outputs.dirty == 'true'
+        run: |
+          curl -fsS "https://proxy.golang.org/github.com/aliziodev/go-indonesia-regions/@v/v${{ steps.version.outputs.new }}.info" \
+            || echo "The proxy has not picked it up yet; it will on its own."
