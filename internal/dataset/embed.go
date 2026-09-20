@@ -18,3 +18,10 @@ var Districts []byte
 
 //go:embed villages.bin
 var Villages []byte
+
+// Metadata is the province and regency attribute table: gzipped CSV rather
+// than the packed format, because 552 rows do not justify a binary layout
+// that would have to carry numbers.
+//
+//go:embed metadata.csv.gz
+var Metadata []byte

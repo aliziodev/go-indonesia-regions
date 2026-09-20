@@ -73,3 +73,26 @@ func (k *VillageKind) UnmarshalText(text []byte) error {
 	}
 	return nil
 }
+
+// MarshalText implements encoding.TextMarshaler.
+func (t Timezone) MarshalText() ([]byte, error) {
+	if t != WIB && t != WITA && t != WIT {
+		return nil, fmt.Errorf("wilayah: cannot marshal timezone %d", int8(t))
+	}
+	return []byte(t.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (t *Timezone) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case "WIB":
+		*t = WIB
+	case "WITA":
+		*t = WITA
+	case "WIT":
+		*t = WIT
+	default:
+		return fmt.Errorf("wilayah: %q is not an Indonesian timezone", text)
+	}
+	return nil
+}

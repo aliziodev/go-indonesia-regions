@@ -1,11 +1,11 @@
 {
     "format": 1,
     "version": "2026.09.20",
-    "package_version": "1.0.72",
+    "package_version": "1.0.73",
     "data_date": "2026-09-20",
     "source_hash": "3c08b4ca92ab-ba8497156c5c",
-    "data_hash": "52ce29195d15a284a5471f6e9a2a62236967d3878ba3574d30f632ebc6f41b28",
-    "generated_at": "2026-09-20T17:44:41+00:00",
+    "data_hash": "b5ec1f8e8605c9a719ee004cb89aeae697f83e2b929dcef8c1085aa315a3ece1",
+    "generated_at": "2026-09-20T18:46:54+00:00",
     "sources": {
         "wilayah": {
             "repo": "cahyadsn/wilayah",
@@ -22,7 +22,8 @@
         "provinces": 38,
         "regencies": 514,
         "districts": 7285,
-        "villages": 83762
+        "villages": 83762,
+        "metadata": 552
     },
     "schema": {
         "provinces": [
@@ -43,6 +44,18 @@
             "name",
             "type",
             "postal_code"
+        ],
+        "metadata": [
+            "code",
+            "capital",
+            "lat",
+            "lng",
+            "elevation",
+            "timezone",
+            "area",
+            "population_male",
+            "population_female",
+            "population_total"
         ]
     },
     "files": {
@@ -65,6 +78,11 @@
             "rows": 83762,
             "bytes": 2785556,
             "sha256": "ef2b2cda0ae43b4e41a10a9f40e480da18ca040e8f42b44360ad4d923b6f8e2b"
+        },
+        "metadata.csv": {
+            "rows": 552,
+            "bytes": 45548,
+            "sha256": "356d444a1e5a92431b980f2e4547ef38e4b072df4b81afa70451ab9c48d4f6cd"
         }
     }
 }

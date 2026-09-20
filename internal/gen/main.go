@@ -16,6 +16,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
 	"encoding/csv"
 	"encoding/hex"
@@ -28,6 +29,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,7 +40,15 @@ const (
 	defaultSource   = "https://github.com/aliziodev/laravel-wilayah/releases/latest/download"
 	supportedFormat = 1
 	maxDownload     = 64 << 20 // the dataset is ~1 MB; this is a sanity bound
+	metadataFile    = "metadata.csv"
 )
+
+// metadataColumns is the layout the generator expects, and the order the
+// package reads back.
+var metadataColumns = []string{
+	"code", "capital", "lat", "lng", "elevation", "timezone",
+	"area", "population_male", "population_female", "population_total",
+}
 
 // levels lists the CSV files in dependency order: every level is validated
 // against the one before it.
@@ -148,6 +158,44 @@ func run(source, out string) error {
 		fmt.Printf("  wrote %-34s %6.1f KB\n", filepath.ToSlash(path), float64(buf.Len())/1024)
 	}
 
+	// Metadata is 552 rows against 83k villages, so it stays gzipped CSV and is
+	// parsed at run time. The packed format exists to make the village table
+	// cheap to decode; wheeling it out for a table this small would buy
+	// microseconds and cost a format that has to carry numbers.
+	metaRaw, ok := files[metadataFile]
+	if !ok {
+		return fmt.Errorf("%s missing from the export", metadataFile)
+	}
+	if err := verify(m, metadataFile, metaRaw); err != nil {
+		return err
+	}
+
+	metaRows, err := checkMetadata(metaRaw, parents["provinces"], parents["regencies"])
+	if err != nil {
+		return fmt.Errorf("%s: %w", metadataFile, err)
+	}
+	if want := m.Counts["metadata"]; want != 0 && want != metaRows {
+		return fmt.Errorf("%s: parsed %d rows, manifest says %d", metadataFile, metaRows, want)
+	}
+
+	var metaBuf bytes.Buffer
+	zw, err := gzip.NewWriterLevel(&metaBuf, gzip.BestCompression)
+	if err != nil {
+		return err
+	}
+	if _, err := zw.Write(metaRaw); err != nil {
+		return err
+	}
+	if err := zw.Close(); err != nil {
+		return err
+	}
+
+	metaPath := filepath.Join(datasetDir, "metadata.csv.gz")
+	if err := os.WriteFile(metaPath, metaBuf.Bytes(), 0o644); err != nil {
+		return err
+	}
+	fmt.Printf("  wrote %-34s %6.1f KB  (%d rows)\n", filepath.ToSlash(metaPath), float64(metaBuf.Len())/1024, metaRows)
+
 	// The manifest is kept verbatim: release automation compares its data_hash
 	// against upstream without needing to build the package.
 	manifestPath := filepath.Join(datasetDir, "manifest.json")
@@ -202,10 +250,14 @@ func loadFromDir(dir string) ([]byte, map[string][]byte, error) {
 		return nil, nil, fmt.Errorf("reading the export: %w", err)
 	}
 
-	files := make(map[string][]byte, len(levels))
+	names := make([]string, 0, len(levels)+1)
 	for _, lv := range levels {
-		name := lv.name + ".csv"
+		names = append(names, lv.name+".csv")
+	}
+	names = append(names, metadataFile)
 
+	files := make(map[string][]byte, len(names))
+	for _, name := range names {
 		raw, err := os.ReadFile(filepath.Join(dir, name))
 		if err != nil {
 			return nil, nil, fmt.Errorf("reading the export: %w", err)
@@ -269,6 +321,12 @@ func download(url string) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "go-indonesia-regions-gen/1")
+
+	// Release assets go through a CDN that will happily hand back the copy of
+	// a file that was just replaced. The checksums in the manifest catch that,
+	// but only as a failure; asking for a fresh copy avoids the trip.
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Pragma", "no-cache")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -375,6 +433,66 @@ func parseCSV(raw []byte, level codec.Level, fields int, parents map[string]stru
 	}
 
 	return recs, nil
+}
+
+// checkMetadata validates the metadata table before it is embedded: every code
+// must name a province or regency that exists, the rows must be sorted and
+// unique, and the numbers must parse. Area is allowed to be missing, because
+// the decree states none for a handful of regions.
+func checkMetadata(raw []byte, provinces, regencies map[string]struct{}) (int, error) {
+	r := csv.NewReader(bytes.NewReader(raw))
+	r.FieldsPerRecord = len(metadataColumns)
+	r.ReuseRecord = true
+
+	var (
+		rows int
+		prev string
+	)
+
+	for {
+		row, err := r.Read()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return 0, err
+		}
+		rows++
+
+		code := row[0]
+		if _, ok := provinces[code]; !ok {
+			if _, ok := regencies[code]; !ok {
+				return 0, fmt.Errorf("line %d: %q is not a province or regency in the export", rows, code)
+			}
+		}
+		if prev != "" && code <= prev {
+			return 0, fmt.Errorf("line %d: %q does not come after %q; the export must be sorted by code", rows, code, prev)
+		}
+		prev = code
+
+		// Columns 2..5 are always present; area (6) may be blank.
+		for _, i := range []int{2, 3, 4, 5, 7, 8, 9} {
+			if row[i] == "" {
+				return 0, fmt.Errorf("line %d: %q has no %s", rows, code, metadataColumns[i])
+			}
+			if _, err := strconv.ParseFloat(row[i], 64); err != nil {
+				return 0, fmt.Errorf("line %d: %q has %s %q, which is not a number", rows, code, metadataColumns[i], row[i])
+			}
+		}
+		if row[6] != "" {
+			if _, err := strconv.ParseFloat(row[6], 64); err != nil {
+				return 0, fmt.Errorf("line %d: %q has area %q, which is not a number", rows, code, row[6])
+			}
+		}
+
+		switch row[5] {
+		case "7", "8", "9": // WIB, WITA, WIT
+		default:
+			return 0, fmt.Errorf("line %d: %q has timezone %q, want 7, 8 or 9", rows, code, row[5])
+		}
+	}
+
+	return rows, nil
 }
 
 // levelOf mirrors wilayah.LevelOf. It is duplicated here on purpose: the

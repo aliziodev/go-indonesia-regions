@@ -6,7 +6,7 @@ package wilayah
 var datasetInfo = DatasetInfo{
 	Version:    "2026.09.20",
 	DataDate:   "2026-09-20",
-	DataHash:   "52ce29195d15a284a5471f6e9a2a62236967d3878ba3574d30f632ebc6f41b28",
+	DataHash:   "b5ec1f8e8605c9a719ee004cb89aeae697f83e2b929dcef8c1085aa315a3ece1",
 	SourceHash: "3c08b4ca92ab-ba8497156c5c",
 	Counts: Counts{
 		Provinces: 38,
