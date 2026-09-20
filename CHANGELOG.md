@@ -10,13 +10,13 @@ Written by the release workflow from the commit history. The same notes appear o
 
 **Full changelog**: https://github.com/aliziodev/go-indonesia-regions/compare/v1.0.1...v1.0.2
 
-## v1.0.1 - 2026-09-21
+## v1.0.1 - 2026-09-20
 
 ### Fixes
 
 - build on 32-bit platforms (567bbe3)
 
-## v1.0.0 - 2026-09-21
+## v1.0.0 - 2026-09-20
 
 ### Features
 
@@ -26,7 +26,7 @@ Written by the release workflow from the commit history. The same notes appear o
 
 - document the profile API (4285e88)
 
-## v0.1.0 - 2026-09-21
+## v0.1.0 - 2026-09-20
 
 ### Features
 
