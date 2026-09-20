@@ -263,11 +263,33 @@ A scheduled workflow checks the published export daily, rebuilds the tables when
 
 Semantic versioning. A data refresh is a patch release; new API is a minor release. The v1 API will not break.
 
+## Known data issues
+
+The data is served exactly as the decree states it, because this package holds no corrections of its own — that is what keeps it identical to the Laravel packages built from the same export. A few things are worth knowing:
+
+- **Kabupaten Wakatobi (74.07) has the wrong longitude.** Upstream records 23.54 where its own boundary polygon starts at 123.58, so the leading 1 was lost during entry. It maps to the coast of Africa until upstream fixes it.
+- **Five regions have no area**, DKI Jakarta among them. `HasArea` reports this rather than leaving a zero to be read as a measurement.
+- **Population is a snapshot** from Kepmendagri No 300.2.2-2430 Tahun 2025, not a live figure.
+- **Names are never re-cased**, so `IV Jurai` and `RD. PJKA` survive intact. See the note on capitalisation above.
+
+Found another? Report it to [cahyadsn/wilayah](https://github.com/cahyadsn/wilayah/issues) and every package downstream of it gets the fix.
+
 ## Contributing
 
 Corrections to the region data belong upstream, at [cahyadsn/wilayah](https://github.com/cahyadsn/wilayah) and [cahyadsn/wilayah_kodepos](https://github.com/cahyadsn/wilayah_kodepos) — this package deliberately holds no edits of its own, so that every consumer sees the same regions.
 
 For the package itself, issues and pull requests are welcome. `internal/dataset` and `version.go` are generated; run `go run ./internal/gen` rather than editing them.
+
+Releases are cut automatically from the commit subjects, so they follow [Conventional Commits](https://www.conventionalcommits.org):
+
+| Prefix | Effect |
+|---|---|
+| `feat:` | minor release |
+| `fix:` `perf:` `docs:` | patch release |
+| `chore:` `ci:` `test:` `refactor:` | no release; rides along with the next one |
+| `feat!:` or `BREAKING CHANGE` | refused — Go needs the module path to move to `/v2`, which is done by hand |
+
+The changelog is written by the same workflow, so there is nothing to update by hand.
 
 ## Credits
 

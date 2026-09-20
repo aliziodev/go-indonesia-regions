@@ -259,11 +259,33 @@ Sebuah workflow terjadwal memeriksa export tersebut tiap hari, membangun ulang t
 
 Mengikuti semantic versioning. Pembaruan data adalah rilis patch; penambahan API adalah rilis minor. API v1 tidak akan dirusak.
 
+## Catatan data yang diketahui
+
+Data disajikan persis seperti keputusan menetapkannya, karena package ini tidak menyimpan koreksi sendiri — itulah yang membuatnya identik dengan package Laravel yang dibangun dari export yang sama. Beberapa hal yang perlu Anda tahu:
+
+- **Kabupaten Wakatobi (74.07) salah longitude.** Hulu mencatat 23,54 padahal poligon batasnya sendiri dimulai di 123,58, jadi angka 1 di depan hilang saat entri. Kalau dipetakan, ia jatuh di pesisir Afrika sampai hulu memperbaikinya.
+- **Lima wilayah tidak punya data luas**, termasuk DKI Jakarta. `HasArea` melaporkannya, ketimbang membiarkan nilai nol terbaca sebagai hasil pengukuran.
+- **Jumlah penduduk adalah potret** dari Kepmendagri No 300.2.2-2430 Tahun 2025, bukan angka hidup.
+- **Nama tidak pernah diubah kapitalisasinya**, sehingga `IV Jurai` dan `RD. PJKA` tetap utuh. Lihat catatan kapitalisasi di atas.
+
+Menemukan yang lain? Laporkan ke [cahyadsn/wilayah](https://github.com/cahyadsn/wilayah/issues), dan semua package di hilirnya ikut terperbaiki.
+
 ## Kontribusi
 
 Koreksi data wilayah sebaiknya diajukan ke hulu, di [cahyadsn/wilayah](https://github.com/cahyadsn/wilayah) dan [cahyadsn/wilayah_kodepos](https://github.com/cahyadsn/wilayah_kodepos) — package ini sengaja tidak menyimpan koreksi sendiri, supaya semua konsumen melihat wilayah yang sama.
 
 Untuk package-nya sendiri, issue dan pull request dipersilakan. `internal/dataset` dan `version.go` adalah file generated; jalankan `go run ./internal/gen`, jangan diedit manual.
+
+Rilis dibuat otomatis dari judul commit, jadi ikuti [Conventional Commits](https://www.conventionalcommits.org):
+
+| Awalan | Akibat |
+|---|---|
+| `feat:` | rilis minor |
+| `fix:` `perf:` `docs:` | rilis patch |
+| `chore:` `ci:` `test:` `refactor:` | tidak merilis; ikut rilis berikutnya |
+| `feat!:` atau `BREAKING CHANGE` | ditolak — Go menuntut module path pindah ke `/v2`, dan itu dikerjakan manual |
+
+Changelog ditulis oleh workflow yang sama, jadi tidak ada yang perlu diperbarui manual.
 
 ## Kredit
 
