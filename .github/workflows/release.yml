@@ -123,6 +123,30 @@ jobs:
 
           cat notes.md
 
+      # A changelog nobody writes by hand is a changelog that stays honest.
+      - name: Record the release in the changelog
+        if: steps.decide.outputs.release == 'true'
+        run: |
+          VERSION="${{ steps.decide.outputs.version }}"
+          HEADING="## $VERSION - $(date +%Y-%m-%d)"
+
+          if [ ! -f CHANGELOG.md ]; then
+            printf '# Changelog\n\n' > CHANGELOG.md
+          fi
+
+          # Everything above the first entry is the preamble; the new entry
+          # goes straight after it so the file reads newest first.
+          {
+            awk 'NR==1 || !/^## /{print} /^## /{exit}' CHANGELOG.md
+            printf '%s\n\n' "$HEADING"
+            cat notes.md
+            echo
+            awk 'found || /^## /{found=1; print}' CHANGELOG.md
+          } > CHANGELOG.next
+
+          mv CHANGELOG.next CHANGELOG.md
+          head -20 CHANGELOG.md
+
       - name: Tag and release
         if: steps.decide.outputs.release == 'true'
         env:
@@ -132,7 +156,14 @@ jobs:
 
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # The changelog entry belongs to the release, so it is committed
+          # before the tag is cut and the tag points at it. HEAD is detached
+          # here, hence the explicit push to main.
+          git add CHANGELOG.md
+          git commit -m "chore: record $VERSION in the changelog [skip ci]"
           git tag -a "$VERSION" -m "$VERSION"
+          git push origin HEAD:main
           git push origin "$VERSION"
 
           gh release create "$VERSION" --title "$VERSION" --notes-file notes.md
