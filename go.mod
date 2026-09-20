@@ -1,3 +1,3 @@
 module github.com/aliziodev/go-indonesia-regions
 
-go 1.27.0
+go 1.23
