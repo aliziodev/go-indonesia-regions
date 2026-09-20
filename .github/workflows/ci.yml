@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         # The oldest supported release and the current one. Anything in
         # between is covered by compatibility promises.
         go: ['1.23', 'stable']
@@ -80,3 +80,26 @@ jobs:
       # parsing; the corpus keeps whatever it finds.
       - name: Fuzz code parsing
         run: go test -run=XXX -fuzz=FuzzLevelOf -fuzztime=60s .
+
+  portability:
+    name: cross-compile
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+
+      # A regions package has no business being architecture specific, but a
+      # constant that does not fit in a 32-bit int compiles fine on amd64 and
+      # breaks on a Raspberry Pi. Building for the odd targets is cheap and
+      # catches exactly that.
+      - name: Build for every supported target
+        run: |
+          set -e
+          for target in linux/386 linux/arm linux/arm64 darwin/arm64 windows/386 windows/arm64 js/wasm freebsd/amd64; do
+            echo "building $target"
+            GOOS="${target%/*}" GOARCH="${target#*/}" go build ./...
+          done

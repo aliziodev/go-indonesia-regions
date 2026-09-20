@@ -138,7 +138,9 @@ func (a *arenaBuilder) add(s string) (uint32, uint8, error) {
 	if off, ok := a.index[s]; ok {
 		return off, uint8(len(s)), nil
 	}
-	if len(a.buf) > math.MaxUint32-len(s) {
+	// Widened to uint64 so the comparison also compiles where int is 32 bits
+	// and the constant would not fit.
+	if uint64(len(a.buf))+uint64(len(s)) > math.MaxUint32 {
 		return 0, 0, fmt.Errorf("%w: arena overflow", ErrFormat)
 	}
 
