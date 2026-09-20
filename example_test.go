@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	wilayah "github.com/aliziodev/go-indonesia-regions"
 )
@@ -169,6 +170,30 @@ func ExampleSearch() {
 	// Output:
 	// 32.04 Kabupaten Bandung
 	// 32.73 Kota Bandung
+}
+
+// A province or regency carries more than a name: where it governs from,
+// where it sits, and which clock it keeps.
+func ExampleProfileByCode() {
+	p, ok := wilayah.ProfileByCode("32.73")
+	if !ok {
+		return
+	}
+
+	fmt.Println(p.Capital, p.Timezone)
+	fmt.Printf("%.2f km2, %d people\n", p.AreaKm2, p.Population.Total)
+	// Output:
+	// Bandung WIB
+	// 166.59 km2, 2591763 people
+}
+
+// The zone is a real time.Location, so it works with the rest of the standard
+// library.
+func ExampleTimezone_Location() {
+	noon := time.Date(2026, 9, 21, 12, 0, 0, 0, wilayah.WIB.Location())
+
+	fmt.Println(noon.In(wilayah.WIT.Location()).Format("15:04 MST"))
+	// Output: 14:00 WIT
 }
 
 // Dataset reports which upstream snapshot the build carries, which is useful

@@ -20,6 +20,15 @@
 //	wilayah.VillagesByPostalCode("40161")
 //	wilayah.Search("KAB. ACEH SELATAN", wilayah.Limit(5))
 //
+// Provinces and regencies carry a profile as well: capital, coordinates,
+// elevation, time zone, area and population, all from the same ministerial
+// decree as the codes themselves.
+//
+//	p, _ := wilayah.ProfileByCode("32.73")
+//	p.Capital           // Bandung
+//	p.Timezone          // WIB
+//	p.Population.Total  // 2591763
+//
 // # Names
 //
 // Names are served exactly as the official data holds them, and are never

@@ -31,7 +31,8 @@ Butuh Go 1.23 atau lebih baru.
 | Kabupaten/kota | 514 |
 | Kecamatan | 7.285 |
 | Desa/kelurahan | 83.762, semuanya berkode pos |
-| Tambahan ukuran binary | ~1,1 MB |
+| Profil provinsi & kab/kota | ibukota, koordinat, elevasi, zona waktu, luas, penduduk |
+| Tambahan ukuran binary | ~1,2 MB |
 | Dependensi | tidak ada |
 
 ## Penggunaan
@@ -140,6 +141,33 @@ wilayah.Search("Kotamobagu")         // 71.74 Kota Kotamobagu, tidak dibaca seba
 Nama disajikan persis seperti data resminya dan tidak pernah diubah kapitalisasinya. Ini disengaja: 1.324 nama mengandung angka Romawi seperti `IV Jurai` atau `XIII Koto Kampar`, dan beberapa memang akronim seperti `RD. PJKA` — semuanya akan dirusak oleh title-case menjadi `Iv Jurai`, `Xiii Koto Kampar`, dan `Rd. Pjka`.
 
 Kalau sebuah nama sampai ke Anda dalam huruf besar semua atau berlabel dari sumber lain, cari namanya lalu pakai nama resmi yang dikembalikan. Itu jauh lebih andal daripada menebak kapitalisasi.
+
+### Melihat profil wilayah
+
+Provinsi dan kab/kota membawa lebih dari sekadar nama:
+
+```go
+p, ok := wilayah.ProfileByCode("32.73")
+
+p.Capital           // Bandung
+p.Latitude          // -6.91
+p.Longitude         // 107.61
+p.Elevation         // 726 meter
+p.Timezone          // WIB
+p.AreaKm2           // 166.59
+p.Population.Total  // 2591763
+```
+
+Zona waktunya berupa `time.Location` sungguhan, jadi menyatu dengan pustaka standar:
+
+```go
+noon := time.Date(2026, 9, 21, 12, 0, 0, 0, wilayah.WIB.Location())
+noon.In(wilayah.WIT.Location())  // 14:00 WIT
+```
+
+Kecamatan dan desa tidak punya profil karena keputusan itu memang tidak memerincinya. Luas wilayah kosong untuk lima daerah di hulu, jadi `HasArea` memberi tahu ada atau tidaknya angka, ketimbang membiarkan Anda menebak arti nilai nol.
+
+Jumlah penduduk adalah **potret** dari keputusan yang mendasari dataset ini, bukan angka hidup. `Dataset().DataDate` memberi tahu potret kapan yang Anda pegang.
 
 ### Menyapu seluruh data
 

@@ -35,7 +35,8 @@ Requires Go 1.23 or newer.
 | Regencies and cities | 514 |
 | Districts | 7,285 |
 | Villages | 83,762, each with a postal code |
-| Added to your binary | ~1.1 MB |
+| Province and regency profiles | capital, coordinates, elevation, time zone, area, population |
+| Added to your binary | ~1.2 MB |
 | Dependencies | none |
 
 ## Usage
@@ -144,6 +145,33 @@ wilayah.Search("Kotamobagu")         // 71.74 Kota Kotamobagu, not read as a lab
 Names are served exactly as the official data holds them, and are never re-cased. That is deliberate: 1,324 names contain Roman numerals such as `IV Jurai` or `XIII Koto Kampar`, and a few are genuine acronyms like `RD. PJKA` — a title-caser turns those into `Iv Jurai`, `Xiii Koto Kampar` and `Rd. Pjka`.
 
 If a name reaches you shouted or labelled from elsewhere, search for it and keep the official name that comes back. That is more reliable than guessing at capitalisation.
+
+### Look up a profile
+
+A province or regency carries more than a name:
+
+```go
+p, ok := wilayah.ProfileByCode("32.73")
+
+p.Capital           // Bandung
+p.Latitude          // -6.91
+p.Longitude         // 107.61
+p.Elevation         // 726 metres
+p.Timezone          // WIB
+p.AreaKm2           // 166.59
+p.Population.Total  // 2591763
+```
+
+The time zone is a real `time.Location`, so it composes with the standard library:
+
+```go
+noon := time.Date(2026, 9, 21, 12, 0, 0, 0, wilayah.WIB.Location())
+noon.In(wilayah.WIT.Location())  // 14:00 WIT
+```
+
+Districts and villages have no profile; the decree does not describe them. Area is missing for five regions upstream, so `HasArea` tells you whether a figure exists rather than leaving you to guess at a zero.
+
+Population is a snapshot from the decree the dataset is built on, not a live figure. `Dataset().DataDate` tells you which snapshot you have.
 
 ### Scan everything
 
