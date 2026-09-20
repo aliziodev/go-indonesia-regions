@@ -1,0 +1,147 @@
+name: Release
+
+# Cuts a release from Conventional Commits once CI is green on main.
+#
+# Data syncs release themselves and are skipped here. A breaking change is
+# refused on purpose: in Go, v2 and above require the module path itself to
+# change, so that one is done by hand.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        !contains(github.event.workflow_run.head_commit.message, '[skip ci]')
+      )
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Release the commit that actually passed CI, not whatever main
+          # happens to point at by now.
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+          fetch-depth: 0
+
+      - name: Decide whether to release, and what version
+        id: decide
+        run: |
+          git fetch --quiet --tags origin
+
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+            echo "main has moved since this run started; leaving the release to the newer run."
+            echo "release=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          LAST_TAG=$(git tag --list 'v*' --sort=-version:refname | head -n 1)
+          if [ -z "$LAST_TAG" ]; then
+            echo "::error::No tag to build on. Create the first one by hand, then this workflow takes over."
+            exit 1
+          fi
+
+          RANGE="$LAST_TAG..HEAD"
+          SUBJECTS=$(git log "$RANGE" --no-merges --pretty=format:'%s' | grep -v '^data:' || true)
+
+          if [ -z "$SUBJECTS" ]; then
+            echo "Nothing to release since $LAST_TAG."
+            echo "release=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Commits since $LAST_TAG:"
+          echo "$SUBJECTS" | sed 's/^/  /'
+
+          # Go refuses to treat v2+ as the same module, so a major bump means
+          # moving the module path to .../v2 and updating every import. That is
+          # a deliberate act, never a side effect of a commit message.
+          BODIES=$(git log "$RANGE" --no-merges --pretty=format:'%B')
+          if echo "$SUBJECTS" | grep -qE '^[a-z]+(\([^)]+\))?!:' || echo "$BODIES" | grep -qE '^BREAKING[ -]CHANGE'; then
+            echo "::error::A breaking change cannot be released automatically. Go requires the module path to gain a /v2 suffix first; do that release by hand."
+            exit 1
+          fi
+
+          # A feature is a minor release. Fixes, performance work and
+          # documentation are patches: on pkg.go.dev the docs are part of what
+          # gets published, so a doc fix is worth shipping.
+          if echo "$SUBJECTS" | grep -qE '^feat(\([^)]+\))?:'; then
+            BUMP=minor
+          elif echo "$SUBJECTS" | grep -qE '^(fix|perf|docs)(\([^)]+\))?:'; then
+            BUMP=patch
+          else
+            echo "Only housekeeping since $LAST_TAG; it can ride along with the next release."
+            echo "release=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${LAST_TAG#v}"
+          case "$BUMP" in
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+
+          NEW="v$MAJOR.$MINOR.$PATCH"
+          echo "release=true"       >> $GITHUB_OUTPUT
+          echo "version=$NEW"       >> $GITHUB_OUTPUT
+          echo "last_tag=$LAST_TAG" >> $GITHUB_OUTPUT
+          echo "$LAST_TAG -> $NEW ($BUMP)"
+
+      - name: Write the release notes
+        if: steps.decide.outputs.release == 'true'
+        run: |
+          RANGE="${{ steps.decide.outputs.last_tag }}..HEAD"
+
+          section() {
+            local title="$1" pattern="$2"
+            local lines
+            lines=$(git log "$RANGE" --no-merges --pretty=format:'%s|%h' \
+              | grep -E "$pattern" \
+              | sed -E 's/^[a-z]+(\([^)]+\))?: ?//; s/\|([0-9a-f]+)$/ (\1)/; s/^/- /' || true)
+            if [ -n "$lines" ]; then
+              printf '### %s\n\n%s\n\n' "$title" "$lines" >> notes.md
+            fi
+          }
+
+          : > notes.md
+          section "Features"      '^feat(\([^)]+\))?:'
+          section "Fixes"         '^(fix|perf)(\([^)]+\))?:'
+          section "Documentation" '^docs(\([^)]+\))?:'
+
+          printf '**Full changelog**: https://github.com/%s/compare/%s...%s\n' \
+            "${{ github.repository }}" "${{ steps.decide.outputs.last_tag }}" "${{ steps.decide.outputs.version }}" >> notes.md
+
+          cat notes.md
+
+      - name: Tag and release
+        if: steps.decide.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.decide.outputs.version }}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "$VERSION"
+          git push origin "$VERSION"
+
+          gh release create "$VERSION" --title "$VERSION" --notes-file notes.md
+
+      # Module versions are immutable once the proxy has them, so this only
+      # asks it to fetch what was just tagged; pkg.go.dev follows within
+      # minutes instead of on its own schedule.
+      - name: Warm the module proxy
+        if: steps.decide.outputs.release == 'true'
+        run: |
+          curl -fsS "https://proxy.golang.org/github.com/${{ github.repository }}/@v/${{ steps.decide.outputs.version }}.info" \
+            || echo "The proxy has not picked it up yet; it will on its own."
