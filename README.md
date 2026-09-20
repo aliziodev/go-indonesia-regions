@@ -2,7 +2,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/aliziodev/go-indonesia-regions.svg)](https://pkg.go.dev/github.com/aliziodev/go-indonesia-regions)
 [![CI](https://github.com/aliziodev/go-indonesia-regions/actions/workflows/ci.yml/badge.svg)](https://github.com/aliziodev/go-indonesia-regions/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/aliziodev/go-indonesia-regions)](https://goreportcard.com/report/github.com/aliziodev/go-indonesia-regions)
+[![Go version](https://img.shields.io/github/go-mod/go-version/aliziodev/go-indonesia-regions)](go.mod)
 
 The official Indonesian administrative regions — provinces, regencies, districts and villages — with postal codes, embedded in your binary.
 
