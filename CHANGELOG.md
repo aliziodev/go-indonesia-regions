@@ -2,6 +2,14 @@
 
 Written by the release workflow from the commit history. The same notes appear on the releases page.
 
+## v1.0.2 - 2026-09-20
+
+### Documentation
+
+- record the known data issues and the commit convention (474e198)
+
+**Full changelog**: https://github.com/aliziodev/go-indonesia-regions/compare/v1.0.1...v1.0.2
+
 ## v1.0.1 - 2026-09-21
 
 ### Fixes
